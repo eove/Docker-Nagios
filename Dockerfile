@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1.2
+
 FROM ubuntu:20.04
 MAINTAINER Jason Rivers <jason@jasonrivers.co.uk>
 
@@ -6,12 +8,11 @@ ENV NAGIOS_USER            nagios
 ENV NAGIOS_GROUP           nagios
 ENV NAGIOS_CMDUSER         nagios
 ENV NAGIOS_CMDGROUP        nagios
-ENV NAGIOS_FQDN            nagios.example.com
-ENV NAGIOSADMIN_USER       nagiosadmin
-ENV NAGIOSADMIN_PASS       nagios
+ENV NAGIOS_FQDN            nagios.eove.fr
 ENV APACHE_RUN_USER        nagios
 ENV APACHE_RUN_GROUP       nagios
-ENV NAGIOS_TIMEZONE        UTC
+ENV NAGIOS_TIMEZONE        CEST
+ENV TZ                     Europe/Paris
 ENV DEBIAN_FRONTEND        noninteractive
 ENV NG_NAGIOS_CONFIG_FILE  ${NAGIOS_HOME}/etc/nagios.cfg
 ENV NG_CGI_DIR             ${NAGIOS_HOME}/sbin
@@ -213,6 +214,8 @@ RUN sed -i.bak 's/.*\=www\-data//g' /etc/apache2/envvars
 RUN export DOC_ROOT="DocumentRoot $(echo $NAGIOS_HOME/share)"                         && \
     sed -i "s,DocumentRoot.*,$DOC_ROOT," /etc/apache2/sites-enabled/000-default.conf  && \
     sed -i "s,</VirtualHost>,<IfDefine ENABLE_USR_LIB_CGI_BIN>\nScriptAlias /cgi-bin/ ${NAGIOS_HOME}/sbin/\n</IfDefine>\n</VirtualHost>," /etc/apache2/sites-enabled/000-default.conf  && \
+    sed -i "s,DocumentRoot.*,$DOC_ROOT," /etc/apache2/sites-available/default-ssl.conf  && \
+    sed -i "s,</VirtualHost>,<IfDefine ENABLE_USR_LIB_CGI_BIN>\nScriptAlias /cgi-bin/ ${NAGIOS_HOME}/sbin/\n</IfDefine>\n</VirtualHost>," /etc/apache2/sites-available/default-ssl.conf  && \
     ln -s /etc/apache2/mods-available/cgi.load /etc/apache2/mods-enabled/cgi.load
 
 RUN mkdir -p -m 0755 /usr/share/snmp/mibs                     && \
@@ -250,7 +253,11 @@ RUN a2enmod session         && \
     a2enmod session_cookie  && \
     a2enmod session_crypto  && \
     a2enmod auth_form       && \
-    a2enmod request
+    a2enmod request         && \
+    a2enmod ssl             && \
+    a2enmod rewrite
+
+RUN a2ensite default-ssl.conf
 
 RUN chmod +x /usr/local/bin/start_nagios        && \
     chmod +x /etc/sv/apache/run                 && \
@@ -270,13 +277,15 @@ RUN ln -s /etc/sv/* /etc/service
 ENV APACHE_LOCK_DIR /var/run
 ENV APACHE_LOG_DIR /var/log/apache2
 
+RUN apt update && apt install tzdata -y
+
 #Set ServerName and timezone for Apache
 RUN echo "ServerName ${NAGIOS_FQDN}" > /etc/apache2/conf-available/servername.conf    && \
     echo "PassEnv TZ" > /etc/apache2/conf-available/timezone.conf            && \
     ln -s /etc/apache2/conf-available/servername.conf /etc/apache2/conf-enabled/servername.conf    && \
     ln -s /etc/apache2/conf-available/timezone.conf /etc/apache2/conf-enabled/timezone.conf
 
-EXPOSE 80 5667 
+EXPOSE 80 443 5667 
 
 VOLUME "${NAGIOS_HOME}/var" "${NAGIOS_HOME}/etc" "/var/log/apache2" "/opt/Custom-Nagios-Plugins" "/opt/nagiosgraph/var" "/opt/nagiosgraph/etc"
 
