@@ -211,10 +211,12 @@ RUN cd /opt                                                                     
 
 
 RUN sed -i.bak 's/.*\=www\-data//g' /etc/apache2/envvars
-RUN export DOC_ROOT="DocumentRoot $(echo $NAGIOS_HOME/share)"                         && \
-    sed -i "s,DocumentRoot.*,$DOC_ROOT," /etc/apache2/sites-enabled/000-default.conf  && \
+RUN export DOC_ROOT="DocumentRoot $(echo $NAGIOS_HOME/share)"                                 && \
+    sed -i "/DocumentRoot/aSetEnv TZ \"${TZ}\"" /etc/apache2/sites-enabled/000-default.conf   && \
+    sed -i "s,DocumentRoot.*,$DOC_ROOT," /etc/apache2/sites-enabled/000-default.conf          && \
     sed -i "s,</VirtualHost>,<IfDefine ENABLE_USR_LIB_CGI_BIN>\nScriptAlias /cgi-bin/ ${NAGIOS_HOME}/sbin/\n</IfDefine>\n</VirtualHost>," /etc/apache2/sites-enabled/000-default.conf  && \
-    sed -i "s,DocumentRoot.*,$DOC_ROOT," /etc/apache2/sites-available/default-ssl.conf  && \
+    sed -i "/DocumentRoot/aSetEnv TZ \"${TZ}\"" /etc/apache2/sites-available/default-ssl.conf && \
+    sed -i "s,DocumentRoot.*,$DOC_ROOT," /etc/apache2/sites-available/default-ssl.conf        && \
     sed -i "s,</VirtualHost>,<IfDefine ENABLE_USR_LIB_CGI_BIN>\nScriptAlias /cgi-bin/ ${NAGIOS_HOME}/sbin/\n</IfDefine>\n</VirtualHost>," /etc/apache2/sites-available/default-ssl.conf  && \
     ln -s /etc/apache2/mods-available/cgi.load /etc/apache2/mods-enabled/cgi.load
 
@@ -277,7 +279,9 @@ RUN ln -s /etc/sv/* /etc/service
 ENV APACHE_LOCK_DIR /var/run
 ENV APACHE_LOG_DIR /var/log/apache2
 
-RUN apt update && apt install tzdata -y
+RUN apt update && apt install tzdata -y && \
+    ln -fs /usr/share/zoneinfo/${TZ} /etc/localtime && \
+    dpkg-reconfigure -f noninteractive tzdata
 
 #Set ServerName and timezone for Apache
 RUN echo "ServerName ${NAGIOS_FQDN}" > /etc/apache2/conf-available/servername.conf    && \
@@ -285,7 +289,7 @@ RUN echo "ServerName ${NAGIOS_FQDN}" > /etc/apache2/conf-available/servername.co
     ln -s /etc/apache2/conf-available/servername.conf /etc/apache2/conf-enabled/servername.conf    && \
     ln -s /etc/apache2/conf-available/timezone.conf /etc/apache2/conf-enabled/timezone.conf
 
-EXPOSE 80 443 5667 
+EXPOSE 80 443 5667
 
 VOLUME "${NAGIOS_HOME}/var" "${NAGIOS_HOME}/etc" "/var/log/apache2" "/opt/Custom-Nagios-Plugins" "/opt/nagiosgraph/var" "/opt/nagiosgraph/etc"
 
