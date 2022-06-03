@@ -13,6 +13,8 @@ ENV APACHE_RUN_USER        nagios
 ENV APACHE_RUN_GROUP       nagios
 ENV NAGIOS_TIMEZONE        CEST
 ENV TZ                     Europe/Paris
+ARG SMTP_RELAY_HOST
+ARG SMTP_RELAY_PORT=587
 ENV DEBIAN_FRONTEND        noninteractive
 ENV NG_NAGIOS_CONFIG_FILE  ${NAGIOS_HOME}/etc/nagios.cfg
 ENV NG_CGI_DIR             ${NAGIOS_HOME}/sbin
@@ -72,6 +74,7 @@ RUN echo postfix postfix/main_mailer_type string "'Internet Site'" | debconf-set
         libssl-dev                          \
         libswitch-perl                      \
         libwww-perl                         \
+        mailutils                           \
         m4                                  \
         netcat                              \
         parallel                            \
@@ -233,8 +236,17 @@ RUN mkdir -p -m 0755 /usr/share/snmp/mibs                     && \
 RUN sed -i 's,/bin/mail,/usr/bin/mail,' ${NAGIOS_HOME}/etc/objects/commands.cfg  && \
     sed -i 's,/usr/usr,/usr,'           ${NAGIOS_HOME}/etc/objects/commands.cfg
 
-RUN cp /etc/services /var/spool/postfix/etc/  && \
-    echo "smtp_address_preference = ipv4" >> /etc/postfix/main.cf
+RUN cp /etc/services /var/spool/postfix/etc/ && \
+    sed -i -e "/^smtpd_banner[^[:alnum:]_]/d" -e "/^smtpd_tls_/d" -e "/^smtp_tls_/d" -e "/^smtp_use_tls[^[:alnum:]_]/d" -e "/^smtp_sasl_/d" -e "/^relayhost[^[:alnum:]_]/d" -e "/^inet_interfaces[^[:alnum:]_]/d" /etc/postfix/main.cf && \
+    echo "smtp_address_preference = ipv4" >> /etc/postfix/main.cf && \
+    echo "inet_interfaces = loopback-only" >> /etc/postfix/main.cf && \
+    echo >> /etc/postfix/main.cf && \
+    echo "relayhost = [${SMTP_RELAY_HOST}]:${SMTP_RELAY_PORT}" >> /etc/postfix/main.cf && \
+    echo "smtp_use_tls = yes" >> /etc/postfix/main.cf && \
+    echo "smtp_sasl_auth_enable = yes" >> /etc/postfix/main.cf && \
+    echo "smtp_sasl_security_options =" >> /etc/postfix/main.cf && \
+    echo "smtp_sasl_password_maps = hash:/opt/nagios/etc/postfix/sasl_passwd" >> /etc/postfix/main.cf && \
+    echo "smtp_tls_CAfile = /etc/ssl/certs/ca-certificates.crt" >> /etc/postfix/main.cf    
 
 RUN rm -rf /etc/rsyslog.d /etc/rsyslog.conf
 
